@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -euo pipefail  # Fail on errors, undefined vars, and pipeline failures
+
+# Check if a file named uvr.toml exists
+if [ ! -f uvr.toml ]; then
+    echo "[X] File uvr.toml does not exist"
+    if [ $# -eq 0 ]; then
+        echo "[X] No script name passed: exiting"
+        exit 1
+    fi
+    
+    # Validate input is a .py file
+    if [[ ! "$1" =~ \.py$ ]]; then
+        echo "[X] Script must be a Python file (.py extension)"
+        exit 1
+    fi
+    
+    echo "script=$1" > uvr.toml
+    echo "[OK] Created uvr.toml with script=$1"
+fi
+
+# Read and validate the script from uvr.toml
+SCRIPT=$(grep -oP 'script=\K[^ ]+' uvr.toml || echo "")
+if [ -z "$SCRIPT" ]; then
+    echo "[X] Invalid or empty script in uvr.toml"
+    exit 1
+fi
+
+# Validate script exists and is a Python file
+if [ ! -f "$SCRIPT" ]; then
+    echo "[X] File $SCRIPT does not exist: exiting"
+    exit 1
+fi
+
+if [[ ! "$SCRIPT" =~ \.py$ ]]; then
+    echo "[X] $SCRIPT is not a Python file"
+    exit 1
+fi
+
+# Run the script with error handling
+echo "[*] Running the script with uv run"
+if ! uv run "$SCRIPT"; then
+    echo "[X] Script execution failed"
+    exit 1
+fi
+

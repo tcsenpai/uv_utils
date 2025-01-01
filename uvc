@@ -1,0 +1,90 @@
+#!/bin/bash
+set -euo pipefail  # Fail on errors, undefined vars, and pipeline failures
+
+# Function to handle errors
+error_exit() {
+    echo "[X] Error: $1" >&2
+    exit 1
+}
+
+# Check if uv is installed
+command -v uv >/dev/null 2>&1 || error_exit "uv is not installed"
+
+# Check write permissions in current directory
+if [ ! -w "." ]; then
+    error_exit "No write permission in current directory"
+fi
+
+# SECTION 1: CHECKING THE USER INPUT AND SANITY CHECKS
+echo "[*] Checking the user input and sanity checks"
+
+# If .venv exists, ask the user if they want to remove it
+if [ -d ".venv" ]; then
+    echo "[*] Directory .venv exists: do you want to remove it? (y/n)"
+    read -r answer
+    case "${answer,,}" in  # Convert to lowercase
+        y|yes) 
+            rm -rf .venv || error_exit "Failed to remove .venv directory"
+            echo "[OK] Directory .venv removed"
+            ;;
+        *)
+            echo "[X] Directory .venv exists and was not removed: exiting"
+            exit 1
+            ;;
+    esac
+else
+    echo "[OK] Directory .venv does not exist: we can proceed"
+fi
+
+# Checking if the user specified a file to add to the project
+# If no argument is passed, add requirements.txt as a default
+if [ -z "$1" ]; then
+    echo "[*] No file specified: adding requirements.txt as a default"
+    FILE="requirements.txt"
+# If an argument is passed, add it to the project instead of requirements.txt
+else
+    echo "[*] File specified: adding $1"
+    FILE="$1"
+fi
+# Also, the specified file should exist
+if [ ! -f "$FILE" ]; then
+    echo "[X] File $FILE does not exist: exiting"
+    exit 1
+fi
+echo "[OK] File $FILE exists"
+
+echo "[OK] All sanity checks passed"
+
+# SECTION 2: INITIALIZING THE UV PROJECT
+echo "[*] Initializing the uv project"
+
+# Create backup with timestamp to avoid conflicts
+BACKUP_SUFFIX=".bak.$(date +%Y%m%d%H%M%S)"
+if [ -f hello.py ]; then
+    echo "[*] File hello.py exists: backing up"
+    mv "hello.py" "hello.py${BACKUP_SUFFIX}" || error_exit "Failed to backup hello.py"
+fi
+
+# Initialize the uv project with error handling
+if ! uv init; then
+    error_exit "Failed to initialize uv project"
+fi
+
+# Remove the hello.py file (if it exists)
+echo "[*] Removing hello.py created by uv init"
+rm -rf hello.py || true
+# If a hello.py.bak file exists, restore it (use BACKUP_SUFFIX)
+if [ -f "hello.py${BACKUP_SUFFIX}" ]; then
+    echo "[*] Restoring hello.py from backup"
+    mv "hello.py${BACKUP_SUFFIX}" hello.py
+fi
+echo "[OK] Initialized the uv project"
+
+# SECTION 3: ADDING THE REQUIREMENTS.TXT OR SPECIFIED FILE TO THE PROJECT
+echo "[*] Adding $FILE to the project"
+uv add -r "$FILE"
+echo "[OK] Added $FILE to the project"
+
+echo "[OK] All uv commands passed! You can now run the project with uv run."
+
+
